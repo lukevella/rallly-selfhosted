@@ -18,7 +18,7 @@ You will need:
 Copy the contents of this repo on to your server or clone this repo with git:
 
 ```
-git clone https://github.com/rallly/self-hosting.git
+git clone https://github.com/lukevella/rallly-selfhosted.git
 ```
 
 Feel free to name the contents of this folder to whatever your prefer.
