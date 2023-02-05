@@ -21,8 +21,6 @@ Copy the contents of this repo on to your server or clone this repo with git:
 git clone https://github.com/lukevella/rallly-selfhosted.git
 ```
 
-Feel free to name the contents of this folder to whatever your prefer.
-
 ### Configure the environment variables
 
 In the root of this project you will find a file called `config.env`. Open this file with a text editor and:
