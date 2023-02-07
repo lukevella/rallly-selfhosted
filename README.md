@@ -31,7 +31,12 @@ In the root of this project you will find a file called `config.env`. Open this 
 
 - Set `SUPPORT_EMAIL` - This will appear as the support email in emails sent out by your instance.
 
-- Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` and `SMTP_PWD` with the details of your SMTP server.
+- Configure your SMTP server
+  - `SMTP_HOST` - The host address of your SMTP server
+  - `SMTP_PORT` - The port of your SMTP server
+  - `SMTP_SECURE` - Set to "true" if SSL is enabled for your SMTP connection
+  - `SMTP_USER` - The username (if auth is enabled)
+  - `SMTP_PWD` - The password (if auth is enabled)
 
 ### Start the server
 
