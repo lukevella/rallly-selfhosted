@@ -19,7 +19,7 @@ To run this project you will need:
 - Access to an SMTP server
 - x86-64 Architecture ([arm64 support has been suspended](https://github.com/lukevella/rallly/discussions/568))
 
-## Setup Instruction
+## Setup Instructions
 
 ### 1. Clone the repository
 
