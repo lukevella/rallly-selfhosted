@@ -32,7 +32,7 @@ cd rallly-selfhosted
 
 In the root of this project you will find a file called `config.env`. This is where you can set your environment variables to configure your instance.
 
-Start by generating a secret key. **Muste be at least 32-characters long**.
+Start by generating a secret key. **Must be at least 32-characters long**.
 
 ```sh
 openssl rand -base64 32
