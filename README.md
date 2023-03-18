@@ -25,6 +25,7 @@ To run this project you will need:
 
 ```
 git clone https://github.com/lukevella/rallly-selfhosted.git
+cd rallly-selfhosted
 ```
 
 ### 2. Add required config
@@ -34,8 +35,7 @@ In the root of this project you will find a file called `config.env`. This is wh
 Start by generating a secret key. **Muste be at least 32-characters long**.
 
 ```sh
-# You can try running this command to generate a random string
-openssl rand -base64 64 | tr -d '\n' ; echo
+openssl rand -base64 32
 ```
 
 Open `config.env` and set `SECRET_PASSWORD` to your secret key.
