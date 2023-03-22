@@ -56,7 +56,7 @@ Next, use the following environment variables to configure your SMTP server:
 
 ### 4. Secure your instance (optional)
 
-The default behaviour of the app is the same as on the cloud-hosted version on [rallly.co](https://rallly.co). i.e. Anyone can create polls without needing to log in. You can prevent this by setting `REQUIRE_AUTH` to `true` in `config.env` which limits poll creation and admin access to logged in users.
+The default behaviour of the app is the same as on the cloud-hosted version on [rallly.co](https://rallly.co). i.e. Anyone can create polls without needing to log in. You can prevent this by setting `AUTH_REQUIRED` to `true` in `config.env` which limits poll creation and admin access to logged in users.
 
 Additionally, you can restrict who is able to register and log in by setting `ALLOWED_EMAILS`. You can use wildcards to allow a range of email addresses.
 
