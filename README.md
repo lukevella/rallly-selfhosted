@@ -52,7 +52,9 @@ Next, use the following environment variables to configure your SMTP server:
 - `SMTP_PORT` - The port of your SMTP server
 - `SMTP_SECURE` - Set to "true" if SSL is enabled for your SMTP connection
 - `SMTP_USER` - The username (if auth is enabled)
+- `SMTP_USER_FILE` - The username passed from a docker secrets file (if auth is enabled)v
 - `SMTP_PWD` - The password (if auth is enabled)
+- `SMTP_PWD_FILE` - The password passed from a docker secrets file (if auth is enabled)
 
 ### 4. Secure your instance (optional)
 
@@ -101,12 +103,15 @@ The app can be configured with the following environment variables.
 | `DISABLE_LANDING_PAGE` | false                 | Whether or not to disable the landing page                                                                                                      |
 | `NEXT_PUBLIC_BASE_URL` | http://localhost:3000 | The base url where this instance is accessible, including the scheme (eg. `http://` or `https://`), the domain name, and optionally a port.     |
 | `SECRET_PASSWORD`      |                       | A random 32-character secret key used to encrypt user sessions                                                                                  |
+| `SECRET_PASSWORD_FILE` |                       | Docker secrets file with a random 32-character secret key used to encrypt user sessions                                                         |
 | `SUPPORT_EMAIL`        |                       | All outgoing emails will show this email as the sender's email address, which also serves as the support email.                                 |
 | `SMTP_HOST`            | localhost             | The host address of your SMTP server                                                                                                            |
 | `SMTP_PORT`            | 25 or 465             | The port of your SMTP server                                                                                                                    |
 | `SMTP_SECURE`          | false                 | Set to "true" if SSL is enabled for your SMTP connection                                                                                        |
 | `SMTP_USER`            |                       | The username (if auth is enabled on your SMTP server)                                                                                           |
+| `SMTP_USER_FILE`       |                       | Docker secrets file with the username (if auth is enabled on your SMTP server)                                                                  |
 | `SMTP_PWD`             |                       | The password (if auth is enabled on your SMTP server)                                                                                           |
+| `SMTP_PWD_FILE`        |                       | Docker secrets file with the password (if auth is enabled on your SMTP server)                                                                  |
 
 ## Update Instructions
 
