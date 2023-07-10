@@ -1,8 +1,95 @@
-version: "3.3"
+version: '3.3'
+
+networks:
+  live_network:
+    external: true
+  internal_network:
+    external: false
+
 services:
-  rallly:
+  traefik:
+    container_name: "traefik"
+    image: "traefik:v2.9"
+
+    networks:
+      - "live_network"
+      - "internal_network"
+
+    restart: unless-stopped
+
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--certificatesresolvers.le.acme.email=example@example.com"  # Add your email address here
+      - "--certificatesresolvers.le.acme.storage=/data/acme.json"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./data:/data"
+
     labels:
-      traefik.enable: "true"
-      traefik.http.routers.plausible.rule: "Host(`example.com`)" # change to your domain name
-      traefik.http.routers.plausible.entrypoints: "websecure"
-      traefik.http.services.plausible.loadbalancer.server.port: "3000"
+      - "traefik.enable=false"
+
+  rallly:
+    container_name: "rallly"
+    image: lukevella/rallly:latest
+    restart: unless-stopped
+
+    networks:
+      - "live_network"
+      - "internal_network"
+
+    depends_on:
+      rallly-db:
+        condition: service_healthy
+
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@rallly-db:5432/db
+
+    env_file:
+      - ./config/rallly.env
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.rallly.loadbalancer.server.port=3000"
+      - "traefik.docker.network=live_network"
+
+      - "traefik.http.routers.rallly-websecure.rule=Host(`rallly.example.com`)"  # Add your domain here
+      - "traefik.http.routers.rallly-websecure.entrypoints=websecure"
+      - "traefik.http.routers.rallly-websecure.tls=true"
+      - "traefik.http.routers.rallly-websecure.tls.certresolver=le"
+
+      - "traefik.http.routers.rallly-web.rule=Host(`rallly.example.com`)"  # Add your domain here
+      - "traefik.http.routers.rallly-web.entrypoints=web"
+      - "traefik.http.routers.rallly-web.middlewares=rallly-http-redirect"
+
+      - "traefik.http.middlewares.rallly-http-redirect.redirectscheme.scheme=https"
+
+  rallly-db:
+    container_name: "rallly-db"
+    image: postgres:14.2
+    restart: unless-stopped
+
+    networks:
+      - "internal_network"
+
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=db
+
+    volumes:
+      - ./data/db-data:/var/lib/postgresql/data
+
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
