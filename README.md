@@ -5,9 +5,8 @@ This repository contains all the necessary information and files to self-host yo
 ## Table of Contents
 
 - [Requirements](#requirements)
-- [Setup Instructions](#setup-instructions)
+- [Version Management](#version-management)
 - [Using a Reverse Proxy](#using-a-reverse-proxy)
-- [Configuration Options](#configuration-options)
 - [Update Instructions](#update-instructions)
 - [Links](#links)
 
@@ -18,6 +17,19 @@ To run this project you will need:
 - Docker
 - Access to an SMTP server
 - x86-64 Architecture ([arm64 support has been suspended](https://github.com/lukevella/rallly/discussions/568))
+
+## Version Management
+
+Rallly uses semantic versioning and releases are published as tags on [Docker Hub](https://hub.docker.com/r/lukevella/rallly).
+You can use `latest` to get the most recent release but it is recommended that you pin the image to a major version to avoid accidentally pulling in breaking changes.
+You can set the version in `docker-compose.yml` by changing the following line:
+
+```
+- image: lukevella/rallly:<version>
+```
+
+Check the [releases](https://github.com/lukevella/rallly/releases) to see what versions are available.
+We follow semver versioning so you may want to set your version to a major release (e.g. `lukevella/rallly:3`) to avoid pulling in breaking changes.
 
 ## Setup Instructions
 
@@ -30,7 +42,9 @@ cd rallly-selfhosted
 
 ### 2. Add required config
 
-In the root of this project you will find a file called `config.env`. This is where you can set your environment variables to configure your instance.
+In the root of this project you will find a file called `config.env`.
+This is where you can set your environment variables to configure your instance.
+This guide will go through the basics but, you can check out the full list of [configuration options](https://support.rallly.co/self-hosting/configuration-options) in the [self-hosting docs](https://support.rallly.co/self-hosting).
 
 Start by generating a secret key. **Must be at least 32-characters long**.
 
@@ -54,20 +68,28 @@ Next, use the following environment variables to configure your SMTP server:
 - `SMTP_USER` - The username (if auth is enabled)
 - `SMTP_PWD` - The password (if auth is enabled)
 
-### 4. Secure your instance (optional)
+### 4. Secure your instance
 
-The default behaviour of the app is the same as on the cloud-hosted version on [rallly.co](https://rallly.co). i.e. Anyone can create polls without needing to log in. You can prevent this by setting `AUTH_REQUIRED` to `true` in `config.env` which limits poll creation and admin access to logged in users.
+By default, anyone can register and login on your instance.
+You can restrict users by setting `ALLOWED_EMAILS`.
 
-Additionally, you can restrict who is able to register and log in by setting `ALLOWED_EMAILS`. You can use wildcards to allow a range of email addresses.
+If only you are planning on using this instance you can set `ALLOWED_EMAILS` to your email address.
 
-```sh
-# Example: only users matching the following patterns can register/login
-ALLOWED_EMAILS="user@email.com,*@example.com,*@*.example.com"
+```
+ALLOWED_EMAILS="john.doe@example.com"
 ```
 
-### 5. Disabling the landing page (optional)
+If you would like to allow multiple users, you separate each email address with a comma.
 
-By default the app will take you to the landing page which may not be what you want. If you want to go straight in to the app, set `DISABLE_LANDING_PAGE` to `true`.
+```
+ALLOWED_EMAILS="john.doe@example.com,jane.doe@example.com"
+```
+
+You can also use wildcards to allow all emails from a domain.
+
+```
+ALLOWED_EMAILS="*@example.com"
+```
 
 ### 6. Start the server
 
@@ -89,10 +111,6 @@ By default the app will run unencrypted on port 3000. If you want to serve the a
 
 > After setting up a reverse proxy be sure to change this line `- 3000:3000` to - `127.0.0.1:3000:3000` in `docker-compose.yml` and restart the container for it to apply changes. This prevents Rallly from being accessed remotely using HTTP on port 3000 which is a security concern.
 
-## Configuration Options
-
-For a full list of configuration options, check out the official [self-hosting docs](https://support.rallly.co/self-hosting/configuration-options).
-
 ## Update Instructions
 
 Rallly is constantly being updated but you will need to manually pull these updates and restart the server to run the latest version. You can do this by running the following commands from within this directory:
@@ -102,17 +120,6 @@ docker compose down
 docker compose pull
 docker compose up -d
 ```
-
-### Version management
-
-You can pin a specific version of Rallly by changing the `image` line in `docker-compose.yml`:
-
-```
-- image: lukevella/rallly:<version>
-```
-
-Check the [releases](https://github.com/lukevella/rallly/releases) to see what versions are available.
-We follow semver versioning so you may want to set your version to a major release (e.g. `lukevella/rallly:2`) to avoid pulling in breaking changes.
 
 ## Links
 
