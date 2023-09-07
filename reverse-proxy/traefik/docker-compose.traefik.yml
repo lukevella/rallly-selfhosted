@@ -3,6 +3,6 @@ services:
   rallly:
     labels:
       traefik.enable: "true"
-      traefik.http.routers.plausible.rule: "Host(`example.com`)" # change to your domain name
-      traefik.http.routers.plausible.entrypoints: "websecure"
-      traefik.http.services.plausible.loadbalancer.server.port: "3000"
+      traefik.http.routers.rallly.rule: "Host(`example.com`)" # change to your domain name
+      traefik.http.routers.rallly.entrypoints: "websecure"
+      traefik.http.services.rallly.loadbalancer.server.port: "3000"
