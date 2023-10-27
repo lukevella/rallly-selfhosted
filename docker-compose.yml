@@ -18,8 +18,7 @@ services:
     image: lukevella/rallly:latest
     restart: always
     depends_on:
-      rallly_db:
-        condition: service_healthy
+      - rallly_db
     ports:
       - 3000:3000
     environment:
