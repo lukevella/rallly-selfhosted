@@ -1,8 +1,15 @@
 version: "3.3"
 services:
   rallly:
+    hostname: rallly
+  rallly_nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
     labels:
       traefik.enable: "true"
-      traefik.http.routers.rallly.rule: "Host(`example.com`)" # change to your domain name
-      traefik.http.routers.rallly.entrypoints: "websecure"
-      traefik.http.services.rallly.loadbalancer.server.port: "3000"
+      traefik.http.routers.rallly.entrypoints: websecure
+      traefik.http.routers.rallly.rule: Host(`example.com`)
+      traefik.http.routers.rallly.service: rallly
+      traefik.http.services.rallly.loadbalancer.server.port: "80"
