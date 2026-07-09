@@ -152,13 +152,13 @@ HTTP/HTTPS ──────►│   Traefik    │ (ports 80/443, auto HTTPS)
                   ▼           ▼
                ┌──────┐   ┌──────┐
                │  DB  │   │Garage│
-               │(PG14)│   │ (S3) │
+               │ (PG) │   │ (S3) │
                └──────┘   └──────┘
 ```
 
 - **Traefik** — Reverse proxy with automatic HTTPS via Let's Encrypt
 - **Rallly** — The web application (sessions are stored in Postgres; rate limiting is in-memory)
-- **PostgreSQL 14** — Database
+- **PostgreSQL** — Database (18 on fresh installs; existing installs stay pinned to their current major via `POSTGRES_VERSION`)
 - **Garage** — S3-compatible object storage for file uploads (internal only, proxied through the app)
 
 Only Traefik binds to host ports. All other services are isolated on the Docker network.
