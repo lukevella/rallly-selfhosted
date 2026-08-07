@@ -448,7 +448,12 @@ cmd_stop() {
 
 cmd_restart() {
   check_docker
-  docker compose restart
+  ensure_postgres_pin
+  ensure_ca_cert_env
+  # `docker compose restart` restarts containers as-is — it does not re-read
+  # .env or apply config changes. `up -d` recreates only what changed, so a
+  # restart picks up edits to .env the way users expect it to.
+  docker compose up -d
   echo "Rallly has been restarted."
 }
 
