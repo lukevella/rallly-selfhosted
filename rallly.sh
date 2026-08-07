@@ -462,10 +462,20 @@ cmd_update() {
   # Update repo files if this is a git clone
   if [ -d "$SCRIPT_DIR/.git" ]; then
     echo "Updating configuration files..."
+    local before after
+    before="$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || true)"
     git -C "$SCRIPT_DIR" pull --ff-only || {
       error "Could not update repo files. You may need to run: git -C $SCRIPT_DIR pull manually."
     }
+    after="$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || true)"
     echo ""
+    # Bash parsed this script into memory before the pull, so the rest of
+    # this run would still be the old code — including any new .env handling
+    # the update just introduced. Re-exec once so the update finishes with
+    # the version it just installed. RALLLY_UPDATE_REEXEC stops it looping.
+    if [ -n "$before" ] && [ "$before" != "$after" ] && [ -z "${RALLLY_UPDATE_REEXEC:-}" ]; then
+      RALLLY_UPDATE_REEXEC=1 exec "$SCRIPT_DIR/rallly.sh" update
+    fi
   fi
   ensure_postgres_pin
   ensure_ca_cert_env
