@@ -1,0 +1,28 @@
+{{- if .Values.garage.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rallly.garage.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: garage
+spec:
+  clusterIP: None
+  ports:
+    - port: 3900
+      targetPort: s3-api
+      protocol: TCP
+      name: s3-api
+    - port: 3901
+      targetPort: rpc
+      protocol: TCP
+      name: rpc
+    - port: 3903
+      targetPort: admin
+      protocol: TCP
+      name: admin
+  selector:
+    {{- include "rallly.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: garage
+{{- end }}

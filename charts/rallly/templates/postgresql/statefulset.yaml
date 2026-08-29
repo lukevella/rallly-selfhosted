@@ -1,0 +1,105 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "rallly.postgresql.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  serviceName: {{ include "rallly.postgresql.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rallly.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "rallly.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      {{- include "rallly.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+      {{- $pgKeys := include "rallly.postgresql.secretKeys" . | fromYaml }}
+      containers:
+        - name: postgresql
+          image: {{ include "rallly.image" (dict "image" .Values.postgresql.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.password }}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.database }}
+            - name: PGDATA
+              value: {{ printf "%s/pgdata" .Values.postgresql.dataMountPath }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $POSTGRES_USER -t 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $POSTGRES_USER -t 5
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          {{- if .Values.postgresql.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.postgresql.dataMountPath }}
+          {{- end }}
+      {{- if and .Values.postgresql.persistence.enabled .Values.postgresql.persistence.existingClaim }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.postgresql.persistence.existingClaim }}
+      {{- end }}
+  {{- if and .Values.postgresql.persistence.enabled (not .Values.postgresql.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        {{- with .Values.postgresql.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.postgresql.persistence.accessModes | nindent 10 }}
+        {{- include "rallly.storageClass" (dict "local" .Values.postgresql.persistence.storageClass "global" .Values.global) | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size }}
+  {{- end }}
+{{- end }}

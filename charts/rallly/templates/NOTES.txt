@@ -1,0 +1,40 @@
+Rallly has been deployed.
+
+{{- $hostMismatch := false }}
+{{- if .Values.ingress.enabled }}
+{{- if ne .Values.ingress.host (regexReplaceAll "^https?://" .Values.baseUrl "" | splitList "/" | first) }}
+{{- $hostMismatch = true }}
+{{- end }}
+{{- end }}
+
+Application URL (baseUrl): {{ .Values.baseUrl }}
+
+{{- if .Values.ingress.enabled }}
+Ingress host: {{ .Values.ingress.host }}
+{{- if $hostMismatch }}
+
+WARNING: ingress.host ({{ .Values.ingress.host }}) does not match the host in
+baseUrl ({{ .Values.baseUrl }}). Rallly builds all links (invites, emails,
+avatars) from baseUrl — mismatched values will produce broken links even
+though the Ingress itself works.
+{{- end }}
+{{- else }}
+No Ingress created (ingress.enabled=false). Access the app with:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "rallly.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+Database: {{ if .Values.postgresql.enabled }}bundled PostgreSQL ({{ .Values.postgresql.image.tag }}){{ else }}external ({{ if .Values.externalDatabase.existingSecret }}from secret {{ .Values.externalDatabase.existingSecret }}{{ else }}externalDatabase.url{{ end }}){{ end }}
+Object storage: {{ if .Values.garage.enabled }}bundled Garage ({{ .Values.garage.image.tag }}){{ else if .Values.externalS3.endpoint }}external ({{ .Values.externalS3.endpoint }}){{ else }}NOT CONFIGURED — file uploads and avatars will fail{{ end }}
+Housekeeping CronJobs: {{ if .Values.housekeeping.enabled }}enabled ({{ len .Values.housekeeping.tasks }} scheduled tasks){{ else }}disabled{{ end }}
+
+{{- if and (not .Values.postgresql.enabled) (not .Values.externalDatabase.url) (not .Values.externalDatabase.existingSecret) }}
+
+WARNING: postgresql.enabled is false but no externalDatabase.url or
+externalDatabase.existingSecret was provided. The app will fail to start.
+{{- end }}
+
+{{- if and (not .Values.garage.enabled) (not .Values.externalS3.endpoint) }}
+
+WARNING: garage.enabled is false but no externalS3.endpoint was provided.
+File uploads and avatars will not work.
+{{- end }}

@@ -196,6 +196,13 @@ HTTP/HTTPS ──────►│   Traefik    │ (ports 80/443, auto HTTPS)
 
 Only Traefik binds to host ports. All other services are isolated on the Docker network.
 
+## Kubernetes
+
+This repository is primarily a Docker Compose stack, but two options exist for running Rallly on Kubernetes:
+
+- **[Helm chart](./charts/rallly)** (recommended) — full feature parity with this Compose stack: bundled PostgreSQL and Garage, SMTP auth, OIDC, housekeeping CronJobs.
+- **[Plain manifests](./kubernetes)** — hand-written YAML for anyone who prefers to manage raw manifests directly.
+
 ## Troubleshooting
 
 ### SSL certificate not working

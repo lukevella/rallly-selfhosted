@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "rallly.fullname" . }}-test-connection
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: status-check
+      image: {{ include "rallly.image" (dict "image" .Values.housekeeping.image "global" .Values.global) }}
+      securityContext:
+        {{- toYaml .Values.containerSecurityContext | nindent 8 }}
+      command:
+        - curl
+        - -fsS
+        - {{ printf "http://%s:%d/api/status" (include "rallly.fullname" .) (int .Values.service.port) }}

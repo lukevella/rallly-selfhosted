@@ -1,0 +1,24 @@
+# External database and object storage, bundled Postgres/Garage disabled.
+baseUrl: https://rallly.example.com
+supportEmail: admin@example.com
+
+secretPassword: "ci-secret-password-must-be-at-least-32-chars"
+
+housekeeping:
+  cronSecret: "ci-cron-secret-must-be-at-least-32-chars"
+
+postgresql:
+  enabled: false
+
+externalDatabase:
+  url: "postgresql://rallly:changeme@external-postgres.example.com:5432/rallly"
+
+garage:
+  enabled: false
+
+externalS3:
+  endpoint: "https://s3.amazonaws.com"
+  bucketName: "rallly-uploads"
+  region: "us-east-1"
+  accessKeyId: "AKIAEXAMPLE"
+  secretAccessKey: "changeme"

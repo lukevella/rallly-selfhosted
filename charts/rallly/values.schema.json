@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "rallly",
+  "type": "object",
+  "required": ["baseUrl", "supportEmail"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^https?://",
+      "description": "Full public URL Rallly builds links against, e.g. https://rallly.example.com"
+    },
+    "supportEmail": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      "description": "Email address shown to users for support inquiries"
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "secretPassword": { "type": "string" },
+    "existingSecret": { "type": "string" },
+    "existingSecretKeys": {
+      "type": "object",
+      "properties": {
+        "secretPassword": { "type": "string" },
+        "cronSecret": { "type": "string" },
+        "smtpPassword": { "type": "string" },
+        "oidcClientSecret": { "type": "string" }
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "password": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "existingSecretKeys": {
+          "type": "object",
+          "properties": {
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "database": { "type": "string" }
+          }
+        }
+      }
+    },
+    "externalDatabase": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "existingSecretKey": { "type": "string" }
+      }
+    },
+    "garage": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "rpcSecret": { "type": "string" },
+        "accessKeyId": { "type": "string" },
+        "secretAccessKey": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "existingSecretKeys": {
+          "type": "object",
+          "properties": {
+            "rpcSecret": { "type": "string" },
+            "accessKeyId": { "type": "string" },
+            "secretAccessKey": { "type": "string" }
+          }
+        }
+      }
+    },
+    "externalS3": {
+      "type": "object",
+      "properties": {
+        "endpoint": { "type": "string" },
+        "bucketName": { "type": "string" },
+        "region": { "type": "string" },
+        "accessKeyId": { "type": "string" },
+        "secretAccessKey": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "existingSecretKeys": {
+          "type": "object",
+          "properties": {
+            "accessKeyId": { "type": "string" },
+            "secretAccessKey": { "type": "string" }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+        },
+        "port": { "type": "integer" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "housekeeping": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "cronSecret": { "type": "string" }
+      }
+    }
+  }
+}

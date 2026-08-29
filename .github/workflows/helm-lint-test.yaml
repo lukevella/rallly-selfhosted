@@ -1,0 +1,76 @@
+name: Helm chart lint & test
+
+on:
+  pull_request:
+    paths:
+      - "charts/**"
+      - ".github/workflows/helm-lint-test.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+
+jobs:
+  lint-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.6.1
+
+      - name: Run chart-testing (lint)
+        run: ct lint --check-version-increment=false --target-branch main --charts charts/rallly
+
+      - name: Set up helm-docs
+        run: |
+          curl -sSLo helm-docs.tar.gz https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+          tar -xzf helm-docs.tar.gz helm-docs
+          sudo mv helm-docs /usr/local/bin/helm-docs
+
+      - name: Verify README is up to date
+        run: |
+          helm-docs --chart-search-root=charts
+          git diff --exit-code -- charts/rallly/README.md || \
+            (echo "::error::charts/rallly/README.md is out of date — run 'helm-docs --chart-search-root=charts' and commit the result." && exit 1)
+
+      - name: Set up kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+
+      - name: Render and validate manifests
+        run: |
+          set -e
+          for values in charts/rallly/ci/default-values.yaml charts/rallly/tests/values/*.yaml; do
+            echo "== ${values} =="
+            helm lint charts/rallly -f "${values}"
+            name="$(basename "${values}" .yaml)"
+            helm template rallly charts/rallly -f "${values}" > "/tmp/${name}.rendered.yaml"
+            kubeconform -strict -summary -kubernetes-version 1.29.0 "/tmp/${name}.rendered.yaml"
+          done
+
+  install:
+    runs-on: ubuntu-latest
+    needs: lint-docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.10.0
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.6.1
+
+      - name: Run chart-testing (install)
+        run: ct install --target-branch main --charts charts/rallly --helm-extra-set-args "--set=baseUrl=http://localhost:8080 --set=supportEmail=me@example.com --timeout=5m"

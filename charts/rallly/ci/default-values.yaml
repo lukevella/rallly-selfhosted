@@ -1,0 +1,16 @@
+# Minimal values exercising the bundled Postgres + Garage defaults.
+baseUrl: https://rallly.example.com
+supportEmail: admin@example.com
+
+secretPassword: "ci-secret-password-must-be-at-least-32-chars"
+
+housekeeping:
+  cronSecret: "ci-cron-secret-must-be-at-least-32-chars"
+
+postgresql:
+  password: "ci-postgres-password"
+
+garage:
+  rpcSecret: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  accessKeyId: "ci-garage-access-key"
+  secretAccessKey: "ci-garage-secret-key"

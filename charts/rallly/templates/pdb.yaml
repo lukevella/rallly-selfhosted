@@ -1,0 +1,14 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "rallly.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "rallly.appSelectorLabels" . | nindent 6 }}
+{{- end }}

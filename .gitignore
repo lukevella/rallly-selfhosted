@@ -3,3 +3,4 @@ backups/
 .DS_Store
 .claude/
 *.pem
+.idea

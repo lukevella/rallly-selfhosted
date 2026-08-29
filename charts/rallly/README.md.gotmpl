@@ -1,0 +1,158 @@
+# rallly
+
+A Helm chart for [Rallly](https://rallly.co), the open-source scheduling tool. Feature-equivalent with the project's `docker-compose.yml` self-hosting stack: bundled PostgreSQL, bundled [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible object storage, SMTP, OIDC single sign-on, and the housekeeping tasks that run on cron for rallly.co but are otherwise absent from a self-hosted install.
+
+## Prerequisites
+
+- Kubernetes 1.23+
+- Helm 3.8+
+- A default StorageClass (or an explicit one via `global.storageClass`) if using the bundled Postgres/Garage
+- An Ingress controller if `ingress.enabled=true`
+
+## Installing
+
+```console
+helm install rallly charts/rallly \
+  --set baseUrl=https://rallly.example.com \
+  --set supportEmail=admin@example.com \
+  --set secretPassword=$(openssl rand -base64 32) \
+  --set housekeeping.cronSecret=$(openssl rand -base64 32) \
+  --set postgresql.password=$(openssl rand -base64 32) \
+  --set garage.rpcSecret=$(openssl rand -hex 32) \
+  --set garage.accessKeyId=$(openssl rand -hex 12) \
+  --set garage.secretAccessKey=$(openssl rand -hex 24)
+```
+
+`baseUrl` and `supportEmail` are required — the chart fails fast via `values.schema.json` if either is missing. Every secret (see [Secrets](#secrets)) is required too — the chart never generates credentials, so it also fails fast if any are missing.
+
+This installs a bundled single-instance PostgreSQL and a bundled single-node Garage instance alongside the app.
+
+## Storage classes and persistence
+
+Every bundled volume (Postgres data, Garage metadata, Garage data) resolves its StorageClass in this order: a per-volume override, then `global.storageClass`, then the cluster default.
+
+```console
+# Use the cluster default everywhere
+helm install rallly charts/rallly -f my-values.yaml
+
+# Point everything at Longhorn
+helm install rallly charts/rallly -f my-values.yaml --set global.storageClass=longhorn
+
+# Longhorn for Postgres, a faster class just for Garage's data volume
+helm install rallly charts/rallly -f my-values.yaml \
+  --set global.storageClass=longhorn \
+  --set garage.persistence.data.storageClass=fast-nvme
+```
+
+A StorageClass value of `"-"` disables dynamic provisioning (`storageClassName: ""`) for that volume. Set `postgresql.persistence.existingClaim` to bring your own PVC instead of a generated `volumeClaimTemplate`.
+
+**`volumeClaimTemplates` are immutable.** Changing a StorageClass on an existing release requires recreating the StatefulSet (and its data) — `helm upgrade` cannot move an existing volume to a different class.
+
+## External database / object storage
+
+Disable the bundled dependencies and point at your own:
+
+```yaml
+postgresql:
+  enabled: false
+externalDatabase:
+  url: "postgresql://user:pass@my-postgres:5432/rallly"
+  # or: existingSecret: my-db-secret / existingSecretKey: DATABASE_URL
+
+garage:
+  enabled: false
+externalS3:
+  endpoint: "https://s3.amazonaws.com"
+  bucketName: "rallly-uploads"
+  region: "us-east-1"
+  accessKeyId: "..."
+  secretAccessKey: "..."
+  # or: existingSecret: my-s3-secret (keys S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY)
+```
+
+## Secrets
+
+The chart never generates credentials. For each of the three secret groups below, set **exactly one** of the inline value(s) or the matching `existingSecret` — never both, and never neither. `helm template`/`install`/`upgrade`/`lint` fail fast with a descriptive error otherwise. This makes rendering fully deterministic, which is required for ArgoCD and any other tool that renders with `helm template` (no live cluster access, so it cannot read back a previously generated value — ask it to mint one and it would mint a *different* one on every sync, rotating credentials out from under an already-initialised Postgres/Garage data directory and churning every session).
+
+```yaml
+# App secret: SECRET_PASSWORD (required), CRON_SECRET (required if
+# housekeeping.enabled), and optionally SMTP_PWD / OIDC_CLIENT_SECRET.
+secretPassword: "..."            # openssl rand -base64 32, min 32 chars
+housekeeping:
+  cronSecret: "..."              # openssl rand -base64 32
+# or, instead of both of the above:
+existingSecret: rallly-app       # keys: SECRET_PASSWORD, CRON_SECRET, optionally SMTP_PWD / OIDC_CLIENT_SECRET
+
+postgresql:
+  password: "..."                # openssl rand -base64 32
+  # or:
+  existingSecret: rallly-postgresql # (keys: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB)
+
+garage:
+  rpcSecret: "..."               # openssl rand -hex 32 — must be 64 lowercase hex chars
+  accessKeyId: "..."
+  secretAccessKey: "..."
+  # or
+  existingSecret: rallly-garage  # (keys: GARAGE_RPC_SECRET / GARAGE_DEFAULT_ACCESS_KEY / GARAGE_DEFAULT_SECRET_KEY)
+```
+
+`postgresql.*` is only validated when `postgresql.enabled`, and `garage.*` only when `garage.enabled` — an external database/object store doesn't need either. Sourcing all three groups from `existingSecret` values (e.g. populated by Sealed Secrets / External Secrets) is the recommended setup for GitOps.
+
+### Key names in an existing Secret
+
+If a pre-existing Secret doesn't use the chart's default key names (e.g. it comes from a Postgres operator, or External Secrets renamed the keys), point the chart at the real names with the matching `existingSecretKeys` map instead of duplicating the Secret:
+
+```yaml
+existingSecret: rallly-app
+existingSecretKeys:
+  secretPassword: SECRET_PASSWORD
+  cronSecret: CRON_SECRET
+  smtpPassword: SMTP_PWD
+  oidcClientSecret: OIDC_CLIENT_SECRET
+
+postgresql:
+  existingSecret: rallly-postgresql
+  existingSecretKeys:
+    username: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+    database: POSTGRES_DB
+
+garage:
+  existingSecret: rallly-garage
+  existingSecretKeys:
+    rpcSecret: GARAGE_RPC_SECRET
+    accessKeyId: GARAGE_DEFAULT_ACCESS_KEY
+    secretAccessKey: GARAGE_DEFAULT_SECRET_KEY
+
+externalS3:
+  existingSecret: my-s3-secret
+  existingSecretKeys:
+    accessKeyId: S3_ACCESS_KEY_ID
+    secretAccessKey: S3_SECRET_ACCESS_KEY
+
+externalDatabase:
+  existingSecretKey: DATABASE_URL
+```
+
+Each `existingSecretKeys` map only applies when the matching `existingSecret` is set — it's ignored for a chart-managed Secret, which always writes the default names. You only need to set the keys you're renaming; the rest keep their defaults.
+
+## Single sign-on (OIDC)
+
+```yaml
+oidc:
+  enabled: true
+  name: "Corporate SSO"
+  discoveryUrl: "https://idp.example.com/.well-known/openid-configuration"
+  clientId: "rallly"
+  clientSecret: "..."
+```
+
+## Housekeeping
+
+Rallly's hosted service runs four maintenance tasks on a schedule (auto-close polls, delete inactive polls, remove soft-deleted polls and users); a self-hosted install runs none of these unless something calls them. This chart ships them as CronJobs, **enabled by default**, matching rallly.co's own schedule (`housekeeping.tasks`). These tasks delete data — review the schedule and disable (`housekeeping.enabled: false`) if you'd rather run it manually or not at all.
+
+## Migrating from `kubernetes/`
+
+If you're moving from this repository's plain `kubernetes/` manifests: they lack object storage, SMTP authentication, and OIDC entirely, and pin a stale image/Postgres version. There is no automated migration path for existing data — back up your database (`pg_dump`) before switching, point `externalDatabase.url` at your existing Postgres instance (or dump/restore into the chart's bundled one), and set `garage.enabled=false` with `externalS3.*` if you already have working object storage, or accept that uploads made before this chart was introduced will need to be migrated into Garage separately.
+
+{{ template "chart.valuesSection" . }}

@@ -1,0 +1,52 @@
+{{- if .Values.housekeeping.enabled }}
+{{- $appKeys := include "rallly.secretKeys" . | fromYaml }}
+{{- range .Values.housekeeping.tasks }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "rallly.fullname" $ }}-housekeeping-{{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ .schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "rallly.selectorLabels" $ | nindent 12 }}
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: housekeeping
+              image: {{ include "rallly.image" (dict "image" $.Values.housekeeping.image "global" $.Values.global) }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              securityContext:
+                {{- toYaml $.Values.containerSecurityContext | nindent 16 }}
+              env:
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "rallly.secretName" $ }}
+                      key: {{ $appKeys.cronSecret }}
+              args:
+                - -fsS
+                - -H
+                - "Authorization: Bearer $(CRON_SECRET)"
+                - {{ printf "http://%s:%d/api/house-keeping/%s" (include "rallly.fullname" $) (int $.Values.service.port) .name }}
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+---
+{{- end }}
+{{- end }}

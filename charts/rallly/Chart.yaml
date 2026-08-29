@@ -1,0 +1,35 @@
+apiVersion: v2
+name: rallly
+description: Rallly is a scheduling tool that allows you to create polls that let participants vote on the best dates and times for a meeting or event.
+type: application
+version: 0.1.0
+appVersion: "4.12.3"
+kubeVersion: ">=1.23.0-0"
+home: https://rallly.co
+icon: https://rallly.co/favicon.svg
+sources:
+  - https://github.com/lukevella/rallly-selfhosted
+  - https://github.com/lukevella/rallly
+keywords:
+  - rallly
+  - scheduling
+  - polls
+  - calendar
+  - self-hosted
+maintainers:
+  - name: lukevella
+    url: https://github.com/lukevella
+annotations:
+  artifacthub.io/license: AGPL-3.0
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://support.rallly.co/self-hosting
+    - name: Source
+      url: https://github.com/lukevella/rallly-selfhosted
+  artifacthub.io/images: |
+    - name: rallly
+      image: docker.io/lukevella/rallly:4.12.3
+    - name: postgres
+      image: docker.io/library/postgres:18-alpine
+    - name: garage
+      image: docker.io/dxflrs/garage:v2.3.0

@@ -1,0 +1,154 @@
+name: Release Helm chart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+  workflow_dispatch:
+    inputs:
+      registry:
+        description: "OCI registry host to push to"
+        required: false
+        default: "ghcr.io"
+      repository:
+        description: "OCI repository path (chart name is appended automatically). Defaults to <owner>/charts"
+        required: false
+        default: ""
+      version:
+        description: "Chart version to publish (e.g. 0.1.0-rc.1). Defaults to Chart.yaml's version"
+        required: false
+        default: ""
+      app_version:
+        description: "App version to embed in the packaged chart. Defaults to Chart.yaml's appVersion"
+        required: false
+        default: ""
+      dry_run:
+        description: "Package and lint only, skip login and push"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Resolve publish settings
+        id: cfg
+        run: |
+          set -e
+
+          registry="${{ inputs.registry }}"
+          registry="${registry:-ghcr.io}"
+
+          repository="${{ inputs.repository }}"
+          repository="${repository:-${{ github.repository_owner }}/charts}"
+
+          # OCI refs must be lowercase.
+          registry=$(echo "$registry" | tr '[:upper:]' '[:lower:]')
+          repository=$(echo "$repository" | tr '[:upper:]' '[:lower:]')
+
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then
+            version=$(helm show chart charts/rallly | yq eval '.version' -)
+          fi
+
+          app_version="${{ inputs.app_version }}"
+          if [ -z "$app_version" ]; then
+            app_version=$(helm show chart charts/rallly | yq eval '.appVersion' -)
+          fi
+
+          {
+            echo "registry=$registry"
+            echo "repository=$repository"
+            echo "version=$version"
+            echo "app_version=$app_version"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Skip if version already published
+        if: github.event_name == 'push'
+        id: guard
+        run: |
+          set -e
+          if helm show chart "oci://${{ steps.cfg.outputs.registry }}/${{ steps.cfg.outputs.repository }}/rallly" \
+            --version "${{ steps.cfg.outputs.version }}" >/dev/null 2>&1; then
+            echo "Chart version ${{ steps.cfg.outputs.version }} is already published, skipping." >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package chart
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -e
+          helm package charts/rallly --destination "$RUNNER_TEMP/chart-package" \
+            --version "${{ steps.cfg.outputs.version }}" \
+            --app-version "${{ steps.cfg.outputs.app_version }}"
+
+      - name: Lint packaged chart
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          helm lint "$RUNNER_TEMP/chart-package/rallly-${{ steps.cfg.outputs.version }}.tgz" \
+            --values charts/rallly/ci/default-values.yaml
+
+      # Pushes the packaged chart as an OCI artifact, so it can be installed with
+      # `helm install oci://<registry>/<repository>/rallly` without relying on a
+      # separate classic Helm HTTP repository / index.yaml.
+      - name: Push chart to registry (OCI)
+        if: steps.guard.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          REGISTRY: ${{ steps.cfg.outputs.registry }}
+          REPOSITORY: ${{ steps.cfg.outputs.repository }}
+          VERSION: ${{ steps.cfg.outputs.version }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -n "$REGISTRY_PASSWORD" ]; then
+            login_user="$REGISTRY_USERNAME"
+            login_pass="$REGISTRY_PASSWORD"
+          elif [ "$REGISTRY" = "ghcr.io" ]; then
+            login_user="$GH_ACTOR"
+            login_pass="$GH_TOKEN"
+          else
+            echo "::error::No REGISTRY_USERNAME/REGISTRY_PASSWORD secrets configured for non-GHCR registry '$REGISTRY'. Refusing to send GITHUB_TOKEN to a third-party host." >&2
+            exit 1
+          fi
+
+          echo "$login_pass" | helm registry login "$REGISTRY" -u "$login_user" --password-stdin
+          helm push "$RUNNER_TEMP/chart-package/rallly-${VERSION}.tgz" "oci://${REGISTRY}/${REPOSITORY}"
+
+          {
+            echo "### Published chart"
+            echo ""
+            echo '```'
+            echo "helm install rallly oci://${REGISTRY}/${REPOSITORY}/rallly --version ${VERSION}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry-run summary
+        if: steps.guard.outputs.skip != 'true' && inputs.dry_run == true
+        run: |
+          {
+            echo "### Dry run — would publish"
+            echo ""
+            echo '```'
+            echo "oci://${{ steps.cfg.outputs.registry }}/${{ steps.cfg.outputs.repository }}/rallly:${{ steps.cfg.outputs.version }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

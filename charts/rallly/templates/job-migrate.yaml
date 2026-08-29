@@ -1,0 +1,81 @@
+{{- if .Values.migrationJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rallly.fullname" . }}-migrate-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrationJob.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "rallly.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "rallly.serviceAccountName" . }}
+      {{- include "rallly.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.postgresql.enabled }}
+      initContainers:
+        - name: wait-for-postgresql
+          image: {{ include "rallly.appImage" . }}
+          command:
+            - sh
+            - -c
+            - |
+              until node -e "require('net').createConnection({host:'{{ include "rallly.postgresql.fullname" . }}',port:5432}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"; do
+                echo "waiting for postgresql..."
+                sleep 2
+              done
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      {{- end }}
+      {{- $pgKeys := include "rallly.postgresql.secretKeys" . | fromYaml }}
+      containers:
+        - name: migrate
+          image: {{ include "rallly.appImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command:
+            - npx
+            - prisma
+            - migrate
+            - deploy
+            - --config=./prisma.config.ts
+          envFrom:
+            - configMapRef:
+                name: {{ include "rallly.configMapName" . }}
+            - secretRef:
+                name: {{ include "rallly.secretName" . }}
+          env:
+            {{- if .Values.postgresql.enabled }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.password }}
+            - name: DATABASE_URL
+              value: {{ printf "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@%s:5432/%s" (include "rallly.postgresql.fullname" .) .Values.postgresql.database | quote }}
+            {{- else if .Values.externalDatabase.existingSecret }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.existingSecretKey }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

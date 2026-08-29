@@ -1,0 +1,109 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "rallly.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "rallly.appSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- if .Values.networkPolicy.ingressNamespaceSelector }}
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 12 }}
+        {{- end }}
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    {{- if .Values.networkPolicy.allowExternalEgress }}
+    - {}
+    {{- else }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "rallly.name" . }}
+              app.kubernetes.io/component: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.garage.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "rallly.name" . }}
+              app.kubernetes.io/component: garage
+      ports:
+        - port: 3900
+          protocol: TCP
+    {{- end }}
+    {{- end }}
+---
+{{- if .Values.postgresql.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "rallly.postgresql.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "rallly.name" . }}
+      app.kubernetes.io/component: postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "rallly.appSelectorLabels" . | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+{{- end }}
+---
+{{- if .Values.garage.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "rallly.garage.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "rallly.name" . }}
+      app.kubernetes.io/component: garage
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "rallly.appSelectorLabels" . | nindent 14 }}
+      ports:
+        - port: 3900
+          protocol: TCP
+        - port: 3901
+          protocol: TCP
+{{- end }}
+{{- end }}

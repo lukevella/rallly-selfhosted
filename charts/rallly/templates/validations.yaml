@@ -1,0 +1,7 @@
+{{/*
+No secret in this chart is ever auto-generated: each group below must get
+either an inline value or an existingSecret name, explicitly. This template
+renders nothing — it exists purely to run the check on every
+lint/template/install/upgrade regardless of which other templates render.
+*/}}
+{{- include "rallly.validateSecrets" . -}}

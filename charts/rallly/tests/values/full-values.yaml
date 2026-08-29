@@ -1,0 +1,71 @@
+# Everything on: ingress+TLS, autoscaling, PDB, NetworkPolicy, migration job,
+# OIDC, CA cert, existingSecret passthrough, multiple replicas.
+baseUrl: https://rallly.example.com
+supportEmail: admin@example.com
+replicaCount: 3
+
+secretPassword: "ci-secret-password-must-be-at-least-32-chars"
+
+housekeeping:
+  cronSecret: "ci-cron-secret-must-be-at-least-32-chars"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: rallly.example.com
+  tls:
+    enabled: true
+    secretName: rallly-tls
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  allowExternalEgress: false
+  ingressNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: ingress-nginx
+
+migrationJob:
+  enabled: true
+
+oidc:
+  enabled: true
+  name: "Corporate SSO"
+  discoveryUrl: "https://idp.example.com/.well-known/openid-configuration"
+  clientId: "rallly"
+  clientSecret: "changeme"
+
+caCert:
+  enabled: true
+  secretName: corporate-ca
+  secretKey: ca.crt
+
+externalDatabase:
+  existingSecret: my-db-secret
+  existingSecretKey: connection-url
+
+postgresql:
+  enabled: false
+
+externalS3:
+  endpoint: "https://s3.amazonaws.com"
+  bucketName: "rallly-uploads"
+  region: "us-east-1"
+  existingSecret: my-s3-secret
+  existingSecretKeys:
+    accessKeyId: aws-access-key-id
+    secretAccessKey: aws-secret-access-key
+
+garage:
+  enabled: false

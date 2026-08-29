@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rallly.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rallly.appSelectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "rallly.appSelectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "rallly.serviceAccountName" . }}
+      {{- include "rallly.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.postgresql.enabled }}
+      initContainers:
+        - name: wait-for-postgresql
+          image: {{ include "rallly.appImage" . }}
+          command:
+            - sh
+            - -c
+            - |
+              until node -e "require('net').createConnection({host:'{{ include "rallly.postgresql.fullname" . }}',port:5432}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"; do
+                echo "waiting for postgresql..."
+                sleep 2
+              done
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      {{- end }}
+      {{- $appKeys := include "rallly.secretKeys" . | fromYaml }}
+      {{- $pgKeys := include "rallly.postgresql.secretKeys" . | fromYaml }}
+      {{- $garageKeys := include "rallly.garage.secretKeys" . | fromYaml }}
+      {{- $s3Keys := include "rallly.externalS3.secretKeys" . | fromYaml }}
+      containers:
+        - name: rallly
+          image: {{ include "rallly.appImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "rallly.configMapName" . }}
+            - secretRef:
+                name: {{ include "rallly.secretName" . }}
+          env:
+            {{- if .Values.existingSecret }}
+            - name: SECRET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.secretName" . }}
+                  key: {{ $appKeys.secretPassword }}
+            - name: SMTP_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.secretName" . }}
+                  key: {{ $appKeys.smtpPassword }}
+                  optional: true
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.secretName" . }}
+                  key: {{ $appKeys.oidcClientSecret }}
+                  optional: true
+            {{- end }}
+            {{- if .Values.postgresql.enabled }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.postgresql.secretName" . }}
+                  key: {{ $pgKeys.password }}
+            - name: DATABASE_URL
+              value: {{ printf "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@%s:5432/%s" (include "rallly.postgresql.fullname" .) .Values.postgresql.database | quote }}
+            {{- else if .Values.externalDatabase.existingSecret }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.existingSecretKey }}
+            {{- end }}
+            {{- if .Values.garage.enabled }}
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.garage.secretName" . }}
+                  key: {{ $garageKeys.accessKeyId }}
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.garage.secretName" . }}
+                  key: {{ $garageKeys.secretAccessKey }}
+            {{- else if and .Values.externalS3.endpoint .Values.externalS3.existingSecret }}
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalS3.existingSecret }}
+                  key: {{ $s3Keys.accessKeyId }}
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalS3.existingSecret }}
+                  key: {{ $s3Keys.secretAccessKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.caCert.enabled .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- if .Values.caCert.enabled }}
+            - name: ca-cert
+              mountPath: /etc/ssl/certs/rallly-custom-ca.pem
+              subPath: {{ .Values.caCert.secretKey }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- if or .Values.caCert.enabled .Values.extraVolumes }}
+      volumes:
+        {{- if .Values.caCert.enabled }}
+        - name: ca-cert
+          secret:
+            secretName: {{ .Values.caCert.secretName }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}

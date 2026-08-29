@@ -1,0 +1,113 @@
+{{- if .Values.garage.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "rallly.garage.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "rallly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: garage
+spec:
+  serviceName: {{ include "rallly.garage.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rallly.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: garage
+  template:
+    metadata:
+      labels:
+        {{- include "rallly.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: garage
+    spec:
+      {{- include "rallly.imagePullSecrets" . | nindent 6 }}
+      # dxflrs/garage is a scratch-based image with no shell and no /etc/passwd
+      # entries (Config.User is unset, i.e. root) — matches docker-compose,
+      # which also runs it unconstrained. There is no non-root UID to pin here
+      # without the image publishing one.
+      {{- $garageKeys := include "rallly.garage.secretKeys" . | fromYaml }}
+      containers:
+        - name: garage
+          image: {{ include "rallly.image" (dict "image" .Values.garage.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/garage", "server", "--single-node", "--default-bucket"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: GARAGE_RPC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.garage.secretName" . }}
+                  key: {{ $garageKeys.rpcSecret }}
+            - name: GARAGE_DEFAULT_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.garage.secretName" . }}
+                  key: {{ $garageKeys.accessKeyId }}
+            - name: GARAGE_DEFAULT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rallly.garage.secretName" . }}
+                  key: {{ $garageKeys.secretAccessKey }}
+            - name: GARAGE_DEFAULT_BUCKET
+              value: {{ .Values.garage.bucketName | quote }}
+          ports:
+            - name: s3-api
+              containerPort: 3900
+              protocol: TCP
+            - name: rpc
+              containerPort: 3901
+              protocol: TCP
+            - name: admin
+              containerPort: 3903
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command: ["/garage", "stats", "-a"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/garage", "stats", "-a"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.garage.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/garage.toml
+              subPath: garage.toml
+              readOnly: true
+            - name: meta
+              mountPath: /var/lib/garage/meta
+            - name: data
+              mountPath: /var/lib/garage/data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "rallly.garage.configMapName" . }}
+  volumeClaimTemplates:
+    - metadata:
+        name: meta
+      spec:
+        accessModes:
+          {{- toYaml .Values.garage.persistence.meta.accessModes | nindent 10 }}
+        {{- include "rallly.storageClass" (dict "local" .Values.garage.persistence.meta.storageClass "global" .Values.global) | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.garage.persistence.meta.size }}
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.garage.persistence.data.accessModes | nindent 10 }}
+        {{- include "rallly.storageClass" (dict "local" .Values.garage.persistence.data.storageClass "global" .Values.global) | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.garage.persistence.data.size }}
+{{- end }}
